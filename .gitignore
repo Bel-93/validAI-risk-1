@@ -1,0 +1,10 @@
+api.txt
+*.db
+*.sqlite
+__pycache__/
+*.pyc
+.env
+knowledge_base/
+.ipynb_checkpoints/
+.config/
+sample_data/
