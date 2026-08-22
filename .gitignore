@@ -1,0 +1,21 @@
+# Secretos — NUNCA subir
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Base de datos local (memoria SQLite del MVP)
+*.db
+*.db-journal
+
+# Deploy temporal
+mcp_deploy/
+
+# macOS
+.DS_Store

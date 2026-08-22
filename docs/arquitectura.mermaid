@@ -1,0 +1,36 @@
+flowchart TD
+    U["Usuario (navegador)"] -->|HTTPS| FE["Frontend - Streamlit<br/>chat · voz 🎤 · carga de archivos"]
+    FE -->|"HTTP: POST /consulta · GET /health"| BE
+
+    subgraph BE["Backend - FastAPI (microservicio)"]
+        AG["Agente LangChain / LangGraph<br/>ReAct + memoria por sesión"]
+        RAG["RAG híbrido<br/>BM25 + kNN + RRF + HyDE"]
+        MCPC["Cliente MCP"]
+        AG --> RAG
+        AG --> MCPC
+    end
+
+    AG -->|"inferencia"| LLM["LLM<br/>OpenAI / Amazon Bedrock"]
+    RAG -->|"consulta vectorial"| ES[("Elasticsearch / OpenSearch<br/>índice validairisk_hybrid")]
+
+    MCPC -->|"streamable_http"| MCPS
+    MCPC -->|"streamable_http"| TAV["MCP externo - Tavily<br/>búsqueda web (fuente pública)"]
+
+    subgraph MCPS["Servidor MCP propio - validairisk (independiente)"]
+        T1["buscar_evidencia_rag<br/>(normativa SBS)"]
+        T2["calcular_calibracion<br/>(binomial, HL, Spiegelhalter)"]
+        T3["validar_metodologia<br/>(IV/WoE, VIF, PSI, benchmark)"]
+    end
+
+    DATA["Data del caso<br/>scores / especificación / Athena (Modo B)"] -.->|"replicación y pruebas"| AG
+
+    AG --> REP["Reporte preliminar de hallazgos<br/>evidencia + severidad + cita SBS"]
+    REP --> HITL{"Validador humano<br/>aprueba / ajusta / descarta"}
+    HITL -->|"aprobado"| MEM[("Memoria de hallazgos<br/>SQLite / DynamoDB")]
+
+    classDef svc fill:#E8F0FE,stroke:#1B3A5B,color:#1B3A5B;
+    classDef ext fill:#FFF3E0,stroke:#B26A00,color:#7A4700;
+    classDef store fill:#E9F7EF,stroke:#1E7E48,color:#12603A;
+    class FE,BE,MCPS svc;
+    class LLM,TAV ext;
+    class ES,MEM,DATA store;
