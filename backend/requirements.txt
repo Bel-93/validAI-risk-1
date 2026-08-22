@@ -1,0 +1,23 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pandas
+numpy
+scipy
+scikit-learn
+elasticsearch
+langchain-core
+langchain-openai
+langchain-community
+langgraph
+langchain-mcp-adapters
+# lectura de insumos y salida
+pypdf
+docx2txt
+matplotlib
+reportlab
+openai
+# AWS (opcional, para LLM_PROVIDER=bedrock y Athena)
+langchain-aws
+awswrangler
