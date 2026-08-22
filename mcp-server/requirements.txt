@@ -1,0 +1,8 @@
+fastmcp
+elasticsearch
+langchain-openai
+langchain-core
+scipy
+pandas
+numpy
+scikit-learn
