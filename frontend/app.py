@@ -27,12 +27,14 @@ st.markdown("""
 .vr-hero {border:1px solid #00ff9c;border-radius:14px;padding:20px 26px;background:#05090a;
   box-shadow:0 0 18px rgba(0,255,156,.18), inset 0 0 22px rgba(0,255,156,.05);
   display:flex;align-items:center;gap:24px;flex-wrap:wrap;}
+.vr-hero-txt {flex:1;min-width:280px;}
+.vr-brain {flex:0 0 auto;}
 .vr-hero-txt h1 {margin:.15rem 0 0;color:#eafff6;font-size:2.5rem;font-weight:800;letter-spacing:.05em;
   text-shadow:0 0 12px rgba(0,255,156,.55);line-height:1.05;}
 .vr-hero-txt .sub {color:#00ff9c;font-size:1.05rem;font-weight:600;margin:.2rem 0 .55rem;letter-spacing:.03em;
   text-shadow:0 0 8px rgba(0,255,156,.4);}
 .vr-hero-txt p {color:#9fb4ad;font-size:.9rem;margin:0;max-width:760px;}
-.vr-card {border:1px solid #00ff9c;border-radius:12px;padding:16px;background:#05090a;height:100%;
+.vr-card {border:1px solid #00ff9c;border-radius:12px;padding:16px;background:#05090a;height:100%;min-height:200px;
   box-shadow:0 0 12px rgba(0,255,156,.12), inset 0 0 16px rgba(0,255,156,.04);transition:box-shadow .25s;}
 .vr-card:hover {box-shadow:0 0 20px rgba(0,255,156,.4);}
 .vr-card h4 {margin:.3rem 0;color:#00ff9c;font-size:1rem;letter-spacing:.03em;text-shadow:0 0 6px rgba(0,255,156,.4);}
@@ -88,9 +90,9 @@ st.markdown(
     '<div class="vr-brain"><svg viewBox="0 0 120 108" width="104" height="94" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#00ff9c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M60 18 C46 8 26 12 22 28 C10 30 8 46 18 53 C9 61 15 78 30 77 C33 92 52 96 60 86 C68 96 87 92 90 77 C105 78 111 61 102 53 C112 46 110 30 98 28 C94 12 74 8 60 18 Z"/><line x1="60" y1="18" x2="60" y2="86" stroke-opacity=".55"/><path class="ln" d="M60 34 C50 34 46 42 52 48 C46 54 50 62 60 60" stroke-width="1.6"/><path class="ln d1" d="M60 40 C70 40 74 48 68 54 C74 60 70 68 60 66" stroke-width="1.6"/><path class="ln d2" d="M30 44 C38 42 40 50 34 54" stroke-width="1.4"/><path class="ln d3" d="M90 44 C82 42 80 50 86 54" stroke-width="1.4"/><path class="ln d4" d="M42 70 C48 66 54 70 52 76" stroke-width="1.4"/><circle class="nd" cx="52" cy="48" r="2.6" fill="#00ff9c" stroke="none"/><circle class="nd n2" cx="68" cy="54" r="2.6" fill="#00ff9c" stroke="none"/><circle class="nd n3" cx="34" cy="54" r="2.2" fill="#00ff9c" stroke="none"/><circle class="nd n4" cx="86" cy="54" r="2.2" fill="#00ff9c" stroke="none"/><circle class="nd n2" cx="60" cy="60" r="2.4" fill="#00ff9c" stroke="none"/></svg></div>'
     '<div class="vr-hero-txt">'
     '<h1>ValidAI Risk</h1>'
-    '<div class="sub">Copiloto de Validación de Modelos PD</div>'
-    '<p>Validación metodológica y de calibración de modelos de probabilidad de '
-    'incumplimiento, alineada a normativa SBS. La decisión final es del validador humano.</p>'
+    '<div class="sub">Copiloto de Validación de Modelos de Riesgo</div>'
+    '<p>Validación de modelos de probabilidad de incumplimiento, alineada a normativa SBS. '
+    'La decisión final es del validador humano.</p>'
     '</div></div>',
     unsafe_allow_html=True,
 )
@@ -155,14 +157,7 @@ with tab1:
     ]
     for c, (t, p) in zip(cols, tarjetas):
         c.markdown(f'<div class="vr-card"><h4>{t}</h4><p>{p}</p></div>', unsafe_allow_html=True)
-    st.write("")
-    st.markdown("""
-    **Arquitectura separada.** El frontend (Streamlit) sólo consume la API del backend
-    (FastAPI) por HTTP. El backend contiene el agente ReAct (LangChain/LangGraph) con memoria,
-    el pipeline RAG híbrido (BM25 + kNN + RRF + HyDE, `RAG_K=10`) sobre Elasticsearch, y un
-    cliente MCP que conecta al **servidor MCP propio** (`validairisk`) y al **MCP externo Tavily**
-    (búsqueda web). Toda la evidencia proviene de una tool: nada se inventa.
-    """)
+
 
 # ===================== TAB 2: revisión IA =====================
 with tab2:
@@ -326,7 +321,7 @@ with tab4:
                         "recomendacion": recomendacion, "decision_humana": decision,
                         "comentario": comentario})
                     if r.json().get("guardado"):
-                        st.success("Feedback validado guardado en memoria (SQLite).")
+                        st.success("Feedback validado guardado en la memoria del asistente.")
                     else:
                         st.error(r.json().get("error", "No se pudo guardar."))
                 except Exception as e:
