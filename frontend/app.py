@@ -260,11 +260,17 @@ with tab2:
 # ===================== TAB 3: consulta (chat) =====================
 with tab3:
     st.subheader("Consulta al copiloto")
+    # Todos los mensajes se renderizan arriba; el cuadro de escritura queda abajo.
     for m in st.session_state.historial:
-        st.chat_message(m["role"]).write(m["content"])
+        with st.chat_message(m["role"]):
+            st.write(m["content"])
+            if m.get("trazas"):
+                with st.expander("Evidencia y trazabilidad"):
+                    for t in m["trazas"]:
+                        st.markdown(f"**{t.get('tool', 'tool')}**")
+                        st.code(t.get("contenido", ""))
     pregunta = st.chat_input("Consulta metodológica, de calibración o normativa SBS…")
     if pregunta:
-        st.chat_message("user").write(pregunta)
         st.session_state.historial.append({"role": "user", "content": pregunta})
         with st.spinner("Analizando…"):
             try:
@@ -274,17 +280,14 @@ with tab3:
             except Exception as e:
                 data = {"error": f"Error de conexión: {e}"}
         if data.get("error"):
-            st.error(data["error"])
+            st.session_state.historial.append(
+                {"role": "assistant", "content": f"⚠️ {data['error']}"})
         else:
             st.session_state.session_id = data.get("session_id", st.session_state.session_id)
-            resp = data.get("respuesta", "")
-            st.chat_message("assistant").write(resp)
-            st.session_state.historial.append({"role": "assistant", "content": resp})
-            if data.get("trazas"):
-                with st.expander("Evidencia y trazabilidad"):
-                    for t in data["trazas"]:
-                        st.markdown(f"**{t.get('tool', 'tool')}**")
-                        st.code(t.get("contenido", ""))
+            st.session_state.historial.append(
+                {"role": "assistant", "content": data.get("respuesta", ""),
+                 "trazas": data.get("trazas")})
+        st.rerun()
 
 # ===================== TAB 4: validación humana =====================
 with tab4:
