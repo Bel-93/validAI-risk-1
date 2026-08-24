@@ -6,3 +6,4 @@ scipy
 pandas
 numpy
 scikit-learn
+uvicorn

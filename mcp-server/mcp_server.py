@@ -96,64 +96,51 @@ logger.info(f"RRF disponible: {RRF_OK}")
 
 
 class HybridRetriever:
-    """Busqueda hibrida: BM25 + kNN coseno + RRF, con fallback automatico."""
+    """BM25 + kNN nativo (serverless-safe). BM25 puro como fallback garantizado."""
     def __init__(self, k=5):
         self.k = k
-        self._rrf = RRF_OK
+
+    def _filtros(self, filtro_normativa, filtro_tipo):
+        f = []
+        if filtro_normativa:
+            f.append({"term": {"metadata.normativa_sbs": filtro_normativa}})
+        if filtro_tipo:
+            f.append({"term": {"metadata.tipo_documento": filtro_tipo}})
+        return f
+
+    def _run(self, texto_bm25, qvec, k, filtros):
+        if es is None:
+            return []
+        fbool = {"bool": {"must": filtros}} if filtros else None
+        # 1) kNN semantico PURO (serverless lo acepta; el combinado query+knn da 400)
+        if qvec is not None:
+            try:
+                knn = {"field": "embedding", "query_vector": qvec,
+                       "k": k, "num_candidates": max(k * 10, 50)}
+                if fbool:
+                    knn["filter"] = fbool
+                hits = self._parse(es.search(index=INDEX_NAME, knn=knn, size=k))
+                if hits:
+                    return hits
+            except Exception as e:
+                logger.warning(f"kNN fallo, uso BM25: {e}")
+        # 2) BM25 puro (garantizado)
+        try:
+            q = {"match": {"page_content": texto_bm25}}
+            if filtros:
+                q = {"bool": {"must": [q], "filter": filtros}}
+            return self._parse(es.search(index=INDEX_NAME, query=q, size=k))
+        except Exception as e:
+            logger.warning(f"BM25 fallo: {e}")
+            return []
 
     def search(self, pregunta, filtro_normativa=None, filtro_tipo=None, k=None):
         k = k or self.k
-        if es is None or not es.indices.exists(index=INDEX_NAME):
-            return []
         try:
             qvec = embeddings_model.embed_query(pregunta) if embeddings_model else None
         except Exception:
             qvec = None
-
-        filtros = []
-        if filtro_normativa:
-            filtros.append({"term": {"metadata.normativa_sbs": filtro_normativa}})
-        if filtro_tipo:
-            filtros.append({"term": {"metadata.tipo_documento": filtro_tipo}})
-
-        if self._rrf and qvec:
-            return self._rrf_search(pregunta, qvec, k, filtros)
-        elif qvec:
-            return self._hybrid_manual(pregunta, qvec, k, filtros)
-        return self._bm25(pregunta, k, filtros)
-
-    def _rrf_search(self, p, qvec, k, filtros):
-        body = {"retriever": {"rrf": {
-            "retrievers": [
-                {"standard": {"query": {"match": {"page_content": p}}}},
-                {"knn": {"field": "embedding", "query_vector": qvec, "num_candidates": k * 4}}
-            ],
-            "rank_window_size": k * 3, "rank_constant": 60
-        }}, "size": k}
-        if filtros:
-            body["retriever"]["rrf"]["filter"] = {"bool": {"must": filtros}}
-        try:
-            return self._parse(es.search(index=INDEX_NAME, body=body))
-        except Exception:
-            return self._hybrid_manual(p, qvec, k, filtros)
-
-    def _hybrid_manual(self, p, qvec, k, filtros):
-        fc = {"bool": {"must": filtros}} if filtros else {"match_all": {}}
-        body = {"query": {"bool": {"must": {"match": {"page_content": p}}, "filter": fc}},
-                "knn": {"field": "embedding", "query_vector": qvec,
-                        "num_candidates": k * 4, "k": k, "filter": fc}, "size": k}
-        try:
-            return self._parse(es.search(index=INDEX_NAME, body=body))
-        except Exception:
-            return self._bm25(p, k, filtros)
-
-    def _bm25(self, p, k, filtros):
-        q = ({"bool": {"must": {"match": {"page_content": p}}, "filter": filtros}}
-             if filtros else {"match": {"page_content": p}})
-        try:
-            return self._parse(es.search(index=INDEX_NAME, body={"query": q, "size": k}))
-        except Exception:
-            return []
+        return self._run(pregunta, qvec, k, self._filtros(filtro_normativa, filtro_tipo))
 
     def _parse(self, resp):
         return [{"page_content": h["_source"].get("page_content", ""),
@@ -163,10 +150,7 @@ class HybridRetriever:
 
 
 class HyDERetriever:
-    """
-    Hypothetical Document Embeddings.
-    Flujo: pregunta -> LLM genera doc hipotetico -> embed(doc) -> kNN+BM25 -> chunks
-    """
+    """HyDE: pregunta -> doc hipotetico -> embedding -> busqueda hibrida."""
     def __init__(self, base_retriever, use_hyde=True):
         self.base = base_retriever
         self._cache = {}
@@ -189,47 +173,14 @@ class HyDERetriever:
             return pregunta
 
     def search(self, pregunta, filtro_normativa=None, filtro_tipo=None, k=5):
-        if not self.llm:
-            return self.base.search(pregunta, filtro_normativa, filtro_tipo, k)
-
-        doc_h = self._doc_hipotetico(pregunta)
+        doc_h = self._doc_hipotetico(pregunta) if self.llm else pregunta
         try:
             hvec = embeddings_model.embed_query(doc_h) if embeddings_model else None
         except Exception:
             hvec = None
-        if hvec is None:
-            return self.base.search(pregunta, filtro_normativa, filtro_tipo, k)
-
-        filtros = []
-        if filtro_normativa:
-            filtros.append({"term": {"metadata.normativa_sbs": filtro_normativa}})
-        if filtro_tipo:
-            filtros.append({"term": {"metadata.tipo_documento": filtro_tipo}})
-
-        if RRF_OK:
-            body = {"retriever": {"rrf": {
-                "retrievers": [
-                    {"standard": {"query": {"match": {"page_content": pregunta}}}},
-                    {"knn": {"field": "embedding", "query_vector": hvec, "num_candidates": k * 4}}
-                ],
-                "rank_window_size": k * 3, "rank_constant": 60
-            }}, "size": k}
-            if filtros:
-                body["retriever"]["rrf"]["filter"] = {"bool": {"must": filtros}}
-        else:
-            fc = {"bool": {"must": filtros}} if filtros else {"match_all": {}}
-            body = {"query": {"bool": {"must": {"match": {"page_content": pregunta}}, "filter": fc}},
-                    "knn": {"field": "embedding", "query_vector": hvec,
-                            "num_candidates": k * 4, "k": k, "filter": fc}, "size": k}
-        try:
-            resp = es.search(index=INDEX_NAME, body=body)
-            return [{"page_content": h["_source"].get("page_content", ""),
-                     "metadata": h["_source"].get("metadata", {}),
-                     "score": round(h.get("_score") or 0, 4),
-                     "hyde_doc": doc_h}
-                    for h in resp["hits"]["hits"]]
-        except Exception:
-            return self.base.search(pregunta, filtro_normativa, filtro_tipo, k)
+        # BM25 sobre la pregunta original + kNN sobre el vector del doc hipotetico
+        return self.base._run(pregunta, hvec, k,
+                              self.base._filtros(filtro_normativa, filtro_tipo))
 
 
 RAG_K = 10  # coherente con la comparacion RAG (HyDE + hibrido, k=10)
@@ -343,6 +294,12 @@ async def buscar_evidencia_rag(
         resultados = r_activo.search(pregunta, filtro_normativa, filtro_tipo, k=RAG_K)
         if modo == "HyDE" and hasattr(r_activo, "_doc_hipotetico"):
             hyde_doc_log = r_activo._doc_hipotetico(pregunta)
+        # Reintento sin filtros: si un filtro (p. ej. tipo) deja fuera todo, igual recuperamos.
+        if not resultados and (filtro_normativa or filtro_tipo):
+            resultados = base_retriever.search(pregunta, None, None, k=RAG_K)
+        # Ultimo respaldo: BM25 puro sin HyDE ni filtros.
+        if not resultados:
+            resultados = base_retriever.search(pregunta, None, None, k=RAG_K)
     except Exception as e:
         log_rag_trace(pregunta, None, "error", [], int((time.time() - t0) * 1000), str(e))
         return f"Error RAG: {e}"
@@ -512,9 +469,22 @@ if __name__ == "__main__":
     if "--stdio" in sys.argv:
         mcp.run(transport="stdio")
     else:
-        import asyncio
+        import uvicorn
         port = int(os.getenv("PORT", 8080))
         logger.info(f"Iniciando servidor MCP en 0.0.0.0:{port} (streamable-http)")
-        asyncio.run(
-            mcp.run_async(transport="streamable-http", host="0.0.0.0", port=port)
-        )
+        # El cliente pega a /mcp/ (con slash). Servimos en /mcp/ para NO generar el
+        # redirect (/mcp/ -> /mcp) que, tras el proxy TLS de Cloud Run, se cae a http
+        # y rompe el handshake. Construimos el ASGI app con path="/mcp/".
+        app = None
+        for build in (
+            lambda: mcp.http_app(path="/mcp/", transport="streamable-http"),
+            lambda: mcp.streamable_http_app(path="/mcp/"),
+            lambda: mcp.streamable_http_app(),
+        ):
+            try:
+                app = build()
+                break
+            except Exception as e:
+                logger.warning(f"No se pudo construir app con esa firma: {e}")
+        uvicorn.run(app, host="0.0.0.0", port=port,
+                    proxy_headers=True, forwarded_allow_ips="*")

@@ -174,11 +174,29 @@ def estado_mcp():
     }
 
 
+def _run_async(coro_factory):
+    """Ejecuta una corrutina en un hilo con su propio event loop.
+    Necesario porque las tools del MCP son asíncronas (agent.ainvoke) y el
+    endpoint puede llamarse desde contexto sync (/consulta) o async (/revisar)."""
+    import asyncio
+    import concurrent.futures
+
+    def runner():
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coro_factory())
+        finally:
+            loop.close()
+
+    with concurrent.futures.ThreadPoolExecutor(1) as ex:
+        return ex.submit(runner).result()
+
+
 def responder(pregunta: str, session_id: str):
     """Ejecuta el agente con memoria por session_id y devuelve (respuesta, trazas)."""
     agent = get_agent()
     cfg = {"configurable": {"thread_id": session_id}}
-    out = agent.invoke({"messages": [("user", pregunta)]}, cfg)
+    out = _run_async(lambda: agent.ainvoke({"messages": [("user", pregunta)]}, cfg))
     msgs = out["messages"]
     respuesta = msgs[-1].content if msgs else ""
     trazas = [{"tool": getattr(m, "name", "tool"), "contenido": str(m.content)[:800]}
