@@ -192,7 +192,20 @@ def revisar(*, modelo="", periodo="", observacion="",
             resumen_metricas = f"Métricas complementarias: {list(df_m.columns)} ({len(df_m)} filas)."
             estado["metricas"] = "OK"
 
-    partes = [p for p in [resumen_metricas,
+    # Manejo de error controlado: scores subidos pero sin insumos suficientes para
+    # ejecutar pruebas (faltan 'pd'/'default' y no hay especificación para Modo B).
+    advertencia = ""
+    if archivo_scores and not calibracion_txt and not metodologia_txt:
+        advertencia = (
+            "El archivo de scores no contiene las columnas requeridas ('pd' y 'default') "
+            "ni se adjuntó una especificación (.json) para replicar la PD (Modo B). "
+            "No se ejecutaron calibración ni validación metodológica. "
+            "Sube los scores con la PD, o adjunta la especificación del modelo."
+        )
+        estado["metricas"] = "Error"
+
+    partes = [p for p in [("ADVERTENCIA: " + advertencia) if advertencia else "",
+                          resumen_metricas,
                           ("=== CALIBRACION (PD) ===\n" + calibracion_txt) if calibracion_txt else "",
                           ("=== METODOLOGIA ===\n" + metodologia_txt) if metodologia_txt else ""] if p]
     resumen_metricas = "\n\n".join(partes)
@@ -226,6 +239,7 @@ def revisar(*, modelo="", periodo="", observacion="",
     return {
         "reporte": reporte,
         "trazas": trazas,
+        "advertencia": advertencia,
         "resumen_metricas": resumen_metricas,
         "calibracion_texto": calibracion_txt,
         "metodologia_texto": metodologia_txt,

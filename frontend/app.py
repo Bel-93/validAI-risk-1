@@ -232,6 +232,8 @@ with tab2:
 
     res = st.session_state.revision
     if res and not res.get("error"):
+        if res.get("advertencia"):
+            st.warning(res["advertencia"])
         if res.get("grafico_calibracion") or res.get("grafico_psi"):
             gc1, gc2 = st.columns(2)
             with gc1:
