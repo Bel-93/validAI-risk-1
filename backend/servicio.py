@@ -197,12 +197,22 @@ def revisar(*, modelo="", periodo="", observacion="",
     advertencia = ""
     if archivo_scores and not calibracion_txt and not metodologia_txt:
         advertencia = (
-            "El archivo de scores no contiene las columnas requeridas ('pd' y 'default') "
-            "ni se adjuntó una especificación (.json) para replicar la PD (Modo B). "
-            "No se ejecutaron calibración ni validación metodológica. "
-            "Sube los scores con la PD, o adjunta la especificación del modelo."
+            "El archivo de scores no contiene las columnas necesarias ('pd' y 'default') "
+            "ni se adjuntó la especificación del modelo (.json) para calcular la PD. "
+            "No se ejecutaron las pruebas de calibración ni de validación metodológica. "
+            "Sube los scores con la PD ya calculada, o adjunta la especificación del modelo."
         )
         estado["metricas"] = "Error"
+
+    # Error controlado: si el insumo es inválido y no hay nada más que validar
+    # (ni documento, ni código, ni observación), se detiene con el mensaje claro
+    # y NO se genera un reporte preliminar.
+    if advertencia and not (texto_metodologia or codigo_modelo or (observacion or "").strip()):
+        estado["preparacion"] = estado["reporte"] = "Error"
+        return {"reporte": "", "trazas": [], "advertencia": advertencia,
+                "resumen_metricas": "", "calibracion_texto": "", "metodologia_texto": "",
+                "grafico_calibracion": None, "grafico_psi": None,
+                "evidencia_rag": "", "estado_flujo": estado}
 
     partes = [p for p in [("ADVERTENCIA: " + advertencia) if advertencia else "",
                           resumen_metricas,
