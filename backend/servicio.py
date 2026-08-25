@@ -236,7 +236,7 @@ def revisar(*, modelo="", periodo="", observacion="",
     prompt = _prompt_validacion(modelo, periodo, texto_metodologia, codigo_modelo,
                                 resumen_metricas, memoria_historica, observacion, evidencia_rag)
     try:
-        reporte, trazas = A.responder(prompt, session_id or "revision")
+        reporte, trazas = A.responder(prompt, session_id or "revision", modo="validacion")
         estado["agente"] = estado["reporte"] = "OK"
     except Exception as e:
         logger.exception("Agente falló")

@@ -146,15 +146,21 @@ def _tools_mcp():
 
 _checkpointer = MemorySaver()
 _agent = None
+_agent_con_mcp = False
 
 
 def get_agent():
-    global _agent
-    if _agent is None:
-        tools = list(T.TOOLS_LOCALES) + _tools_mcp()
+    """Devuelve el agente. Si en un build anterior el MCP estaba frío y el agente
+    quedó solo con tools locales, se RECONSTRUYE cuando el MCP ya responde, para
+    que el agente tenga siempre las tools remotas (incluida la búsqueda web)."""
+    global _agent, _agent_con_mcp
+    if _agent is None or not _agent_con_mcp:
+        mcp_tools = _tools_mcp()
+        tools = list(T.TOOLS_LOCALES) + mcp_tools
         _agent = create_react_agent(_llm(), tools=tools,
                                     prompt=SYSTEM_PROMPT, checkpointer=_checkpointer)
-        logger.info(f"Agente construido con {len(tools)} tools.")
+        _agent_con_mcp = len(mcp_tools) > 0
+        logger.info(f"Agente construido con {len(tools)} tools (mcp={_agent_con_mcp}).")
     return _agent
 
 
@@ -192,10 +198,20 @@ def _run_async(coro_factory):
         return ex.submit(runner).result()
 
 
-def responder(pregunta: str, session_id: str):
-    """Ejecuta el agente con memoria por session_id y devuelve (respuesta, trazas)."""
+def responder(pregunta: str, session_id: str, modo: str = "consulta"):
+    """Ejecuta el agente con memoria por session_id y devuelve (respuesta, trazas).
+    modo='consulta' -> respuesta concisa y citada (chat). modo='validacion' -> reporte completo."""
     agent = get_agent()
     cfg = {"configurable": {"thread_id": session_id}}
+    if modo == "consulta":
+        pregunta = (
+            "[Instrucción: es una CONSULTA, no una validación de un modelo con insumos. "
+            "Responde de forma directa y fundamentada, citando la fuente normativa. Puedes "
+            "estructurar la respuesta, pero NO uses el formato de reporte de validación: no "
+            "incluyas secciones como 'Resultados de las pruebas ejecutadas', 'Hallazgos de "
+            "código / implementación', 'Consistencia metodología vs código', 'Benchmark' ni "
+            "'Próximos pasos', porque aquí no se está validando ningún modelo.]\n\n" + pregunta
+        )
     out = _run_async(lambda: agent.ainvoke({"messages": [("user", pregunta)]}, cfg))
     msgs = out["messages"]
     respuesta = msgs[-1].content if msgs else ""

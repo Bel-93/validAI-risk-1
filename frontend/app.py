@@ -152,7 +152,7 @@ with tab1:
     tarjetas = [
         ("Insumos", "Documento metodológico, código/notebook/SQL/ZIP, scores y especificación del modelo."),
         ("Backend (API)", "El frontend llama al backend; ahí viven el agente LangChain, el RAG y el cliente MCP."),
-        ("Pruebas de validación", "Replicación (Modo B), metodológica (IV/WoE, VIF, signos, PSI), calibración y benchmark."),
+        ("Pruebas de validación", "Replicación, metodológica (IV/WoE, VIF, signos, PSI), calibración y benchmark."),
         ("Reporte + HITL", "Reporte preliminar con evidencia y cita SBS; el validador humano aprueba/ajusta/descarta."),
     ]
     for c, (t, p) in zip(cols, tarjetas):
@@ -170,16 +170,16 @@ with tab2:
                                     type=["py", "ipynb", "sql", "txt", "md", "json", "zip"],
                                     accept_multiple_files=True)
     with c3:
-        f_datos = st.file_uploader("Métricas complementarias", type=["csv", "xlsx", "xls"])
+        f_datos = st.file_uploader("Archivos complementarios", type=["csv", "xlsx", "xls"])
 
     f_scores = st.file_uploader(
         "Data para calibración: scores (pd, default) o data cruda (variables + flag_default)",
         type=["csv", "xlsx", "xls"])
     f_espec = st.file_uploader(
-        "Especificación del modelo (JSON) — para replicar la PD (Modo B)", type=["json"])
+        "Especificación del modelo (JSON) — para replicar la PD", type=["json"])
 
     # Dictado por voz (Whisper en el backend)
-    audio = st.audio_input("🎤 Dictar la observación (opcional)")
+    audio = st.audio_input("🎤 Dictar la observación")
     if audio is not None and st.button("Transcribir dictado"):
         try:
             r = api_post("/transcribir",

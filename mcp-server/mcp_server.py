@@ -291,12 +291,15 @@ async def buscar_evidencia_rag(
     t0 = time.time()
     hyde_doc_log = None
     try:
-        resultados = r_activo.search(pregunta, filtro_normativa, filtro_tipo, k=RAG_K)
+        # Preferimos NORMATIVA SBS real (resoluciones) sobre la documentacion de
+        # modelos de ejemplo. Si el agente no especifico tipo, forzamos normativa_sbs.
+        tipo_pref = filtro_tipo or "normativa_sbs"
+        resultados = r_activo.search(pregunta, filtro_normativa, tipo_pref, k=RAG_K)
         if modo == "HyDE" and hasattr(r_activo, "_doc_hipotetico"):
             hyde_doc_log = r_activo._doc_hipotetico(pregunta)
-        # Reintento sin filtros: si un filtro (p. ej. tipo) deja fuera todo, igual recuperamos.
-        if not resultados and (filtro_normativa or filtro_tipo):
-            resultados = base_retriever.search(pregunta, None, None, k=RAG_K)
+        # Si normativa no dio resultados, reintenta SIN filtro de tipo.
+        if not resultados:
+            resultados = r_activo.search(pregunta, filtro_normativa, None, k=RAG_K)
         # Ultimo respaldo: BM25 puro sin HyDE ni filtros.
         if not resultados:
             resultados = base_retriever.search(pregunta, None, None, k=RAG_K)
