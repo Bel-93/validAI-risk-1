@@ -202,8 +202,19 @@ def responder(pregunta: str, session_id: str, modo: str = "consulta"):
     """Ejecuta el agente con memoria por session_id y devuelve (respuesta, trazas).
     modo='consulta' -> respuesta concisa y citada (chat). modo='validacion' -> reporte completo."""
     agent = get_agent()
-    cfg = {"configurable": {"thread_id": session_id}}
-    if modo == "consulta":
+    if modo == "validacion":
+        # Hilo NUEVO por revisión: evita reproducir un historial corrupto (tool_calls
+        # colgados de una corrida anterior) y no arrastra memoria entre modelos.
+        import uuid as _uuid
+        thread = f"rev-{_uuid.uuid4().hex[:8]}"
+        pregunta = (
+            "[Instrucción: los RESULTADOS de las pruebas (calibración y metodología) YA están "
+            "calculados y aparecen abajo en RESULTADOS/MÉTRICAS, junto con la evidencia RAG. "
+            "NO llames a ninguna herramienta: redacta el reporte de validación usando "
+            "EXCLUSIVAMENTE esos resultados y la evidencia provista.]\n\n" + pregunta
+        )
+    else:
+        thread = session_id
         pregunta = (
             "[Instrucción: es una CONSULTA, no una validación de un modelo con insumos. "
             "Responde de forma directa y fundamentada, citando la fuente normativa. Puedes "
@@ -212,6 +223,7 @@ def responder(pregunta: str, session_id: str, modo: str = "consulta"):
             "código / implementación', 'Consistencia metodología vs código', 'Benchmark' ni "
             "'Próximos pasos', porque aquí no se está validando ningún modelo.]\n\n" + pregunta
         )
+    cfg = {"configurable": {"thread_id": thread}}
     out = _run_async(lambda: agent.ainvoke({"messages": [("user", pregunta)]}, cfg))
     msgs = out["messages"]
     respuesta = msgs[-1].content if msgs else ""
